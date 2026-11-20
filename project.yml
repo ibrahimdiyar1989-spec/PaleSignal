@@ -1,58 +1,20 @@
-name: Build PaleSignal IPA
+name: PaleSignal
+options:
+  deploymentTarget:
+    iOS: "16.0"
+  bundleIdPrefix: com.palesignal
 
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-  workflow_dispatch:
-
-jobs:
-  build:
-    runs-on: macos-15
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Install XcodeGen
-        run: brew install xcodegen
-
-      - name: Generate Xcode Project
-        run: |
-          set -euxo pipefail
-          cd "$GITHUB_WORKSPACE"
-          xcodegen generate --spec project.yml
-          test -f PaleSignal.xcodeproj/project.pbxproj
-
-      - name: Build Unsigned iOS App
-        run: |
-          set -euxo pipefail
-          xcodebuild \
-            -project "$GITHUB_WORKSPACE/PaleSignal.xcodeproj" \
-            -scheme PaleSignal \
-            -configuration Release \
-            -sdk iphoneos \
-            -derivedDataPath "$GITHUB_WORKSPACE/build" \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            clean build
-
-      - name: Package IPA
-        run: |
-          set -euxo pipefail
-          APP="$GITHUB_WORKSPACE/build/Build/Products/Release-iphoneos/PaleSignal.app"
-          test -d "$APP"
-          mkdir -p "$GITHUB_WORKSPACE/Payload"
-          cp -R "$APP" "$GITHUB_WORKSPACE/Payload/"
-          ditto -c -k --sequesterRsrc --keepParent \
-            "$GITHUB_WORKSPACE/Payload" \
-            "$GITHUB_WORKSPACE/PaleSignal.ipa"
-
-      - name: Upload IPA
-        uses: actions/upload-artifact@v4
-        with:
-          name: PaleSignal-iOS-unsigned
-          path: PaleSignal.ipa
-          if-no-files-found: error
-          retention-days: 14
+targets:
+  PaleSignal:
+    type: application
+    platform: iOS
+    sources:
+      - Sources
+    info:
+      path: Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.palesignal.game
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
