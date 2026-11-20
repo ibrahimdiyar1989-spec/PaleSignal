@@ -1,26 +1,46 @@
-name: PaleSignal
-options:
-  bundleIdPrefix: com.palesignal
-  deploymentTarget:
-    iOS: "16.0"
-  xcodeVersion: "15.0"
-settings:
-  base:
-    SWIFT_VERSION: "5.9"
-    TARGETED_DEVICE_FAMILY: "1,2"
-    IPHONEOS_DEPLOYMENT_TARGET: "16.0"
-    ENABLE_BITCODE: "NO"
-    GENERATE_INFOPLIST_FILE: "NO"
-targets:
-  PaleSignal:
-    type: application
-    platform: iOS
-    deploymentTarget: "16.0"
-    sources:
-      - path: Sources
-    settings:
-      base:
-        INFOPLIST_FILE: Info.plist
-        PRODUCT_BUNDLE_IDENTIFIER: com.palesignal.game
-        PRODUCT_NAME: PaleSignal
-        ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOLS: "NO"
+name: Build PaleSignal IPA
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode Project
+        run: xcodegen generate
+
+      - name: Build Unsigned Release App
+        run: |
+          xcodebuild \
+            -project PaleSignal.xcodeproj \
+            -scheme PaleSignal \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            clean build
+
+      - name: Package IPA
+        run: |
+          mkdir -p Payload
+          cp -r build/Build/Products/Release-iphoneos/PaleSignal.app Payload/
+          zip -r PaleSignal.ipa Payload
+
+      - name: Upload PaleSignal.ipa Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PaleSignal-iOS
+          path: PaleSignal.ipa
