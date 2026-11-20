@@ -2,14 +2,14 @@ name: Build PaleSignal IPA
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-15
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -18,16 +18,21 @@ jobs:
         run: brew install xcodegen
 
       - name: Generate Xcode Project
-        run: xcodegen generate
-
-      - name: Build Unsigned Release App
         run: |
+          set -euxo pipefail
+          cd "$GITHUB_WORKSPACE"
+          xcodegen generate --spec project.yml
+          test -f PaleSignal.xcodeproj/project.pbxproj
+
+      - name: Build Unsigned iOS App
+        run: |
+          set -euxo pipefail
           xcodebuild \
-            -project PaleSignal.xcodeproj \
+            -project "$GITHUB_WORKSPACE/PaleSignal.xcodeproj" \
             -scheme PaleSignal \
             -configuration Release \
             -sdk iphoneos \
-            -derivedDataPath build \
+            -derivedDataPath "$GITHUB_WORKSPACE/build" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
@@ -35,12 +40,19 @@ jobs:
 
       - name: Package IPA
         run: |
-          mkdir -p Payload
-          cp -r build/Build/Products/Release-iphoneos/PaleSignal.app Payload/
-          zip -r PaleSignal.ipa Payload
+          set -euxo pipefail
+          APP="$GITHUB_WORKSPACE/build/Build/Products/Release-iphoneos/PaleSignal.app"
+          test -d "$APP"
+          mkdir -p "$GITHUB_WORKSPACE/Payload"
+          cp -R "$APP" "$GITHUB_WORKSPACE/Payload/"
+          ditto -c -k --sequesterRsrc --keepParent \
+            "$GITHUB_WORKSPACE/Payload" \
+            "$GITHUB_WORKSPACE/PaleSignal.ipa"
 
-      - name: Upload PaleSignal.ipa Artifact
+      - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: PaleSignal-iOS
+          name: PaleSignal-iOS-unsigned
           path: PaleSignal.ipa
+          if-no-files-found: error
+          retention-days: 14
