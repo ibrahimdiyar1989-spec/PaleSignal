@@ -17,30 +17,43 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
-      - name: Generate Xcode Project
-        run: xcodegen generate
-
-      - name: Build Unsigned Release App
+      - name: Generate and verify Xcode project
         run: |
+          set -euxo pipefail
+          cd "$GITHUB_WORKSPACE"
+          xcodegen generate --spec "$GITHUB_WORKSPACE/project.yml"
+          ls -la "$GITHUB_WORKSPACE"
+          test -d "$GITHUB_WORKSPACE/PaleSignal.xcodeproj"
+
+      - name: Build unsigned iOS app
+        run: |
+          set -euxo pipefail
           xcodebuild \
-            -project PaleSignal.xcodeproj \
+            -project "$GITHUB_WORKSPACE/PaleSignal.xcodeproj" \
             -scheme PaleSignal \
             -configuration Release \
             -sdk iphoneos \
-            -derivedDataPath build \
+            -derivedDataPath "$GITHUB_WORKSPACE/build" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             clean build
 
-      - name: Package IPA
+      - name: Package unsigned IPA
         run: |
-          mkdir -p Payload
-          cp -r build/Build/Products/Release-iphoneos/PaleSignal.app Payload/
-          zip -r PaleSignal.ipa Payload
+          set -euxo pipefail
+          APP_PATH="$GITHUB_WORKSPACE/build/Build/Products/Release-iphoneos/PaleSignal.app"
+          test -d "$APP_PATH"
+          mkdir -p "$GITHUB_WORKSPACE/Payload"
+          cp -R "$APP_PATH" "$GITHUB_WORKSPACE/Payload/PaleSignal.app"
+          /usr/bin/ditto -c -k --sequesterRsrc --keepParent \
+            "$GITHUB_WORKSPACE/Payload" "$GITHUB_WORKSPACE/PaleSignal.ipa"
+          test -s "$GITHUB_WORKSPACE/PaleSignal.ipa"
 
-      - name: Upload PaleSignal.ipa Artifact
+      - name: Upload unsigned IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PaleSignal-iOS
+          name: PaleSignal-iOS-unsigned
           path: PaleSignal.ipa
+          if-no-files-found: error
+          retention-days: 14
